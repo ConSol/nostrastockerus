@@ -1,0 +1,75 @@
+<server description="prophecy service">
+
+    <featureManager>
+        <feature>mpJwt-1.1</feature>
+        <feature>jaxrs-2.1</feature>
+        <feature>cdi-2.0</feature>
+        <feature>jpa-2.2</feature>
+        <feature>beanValidation-2.0</feature>
+        <feature>mpOpenAPI-1.0</feature>
+        <feature>mpOpenTracing-1.1</feature>
+        <feature>usr:opentracingZipkin-0.31</feature>
+        <feature>mpMetrics-1.1</feature>
+        <feature>mpHealth-1.0</feature>
+        <feature>jsonb-1.0</feature>
+    </featureManager>
+
+    <mpMetrics authentication="false"/>
+
+    <opentracingZipkin host="zipkin" port="9411"/>
+
+    <keyStore id="defaultKeyStore"
+              location="${env.KEY_STORE_LOCATION}"
+              type="${env.KEY_STORE_TYPE}"
+              password="${env.KEY_STORE_PASSWORD}"
+              readonly="true"/>
+
+    <keyStore id="defaultTrustStore"
+              location="${env.TRUST_STORE_LOCATION}"
+              type="${env.TRUST_STORE_TYPE}"
+              password="${env.TRUST_STORE_PASSWORD}"
+              readonly="true"/>
+
+    <sslDefault sslRef="ssl"/>
+    <ssl id="ssl"
+         keyStoreRef="defaultKeyStore"
+         trustStoreRef="defaultTrustStore"/>
+
+    <httpEndpoint id="defaultHttpEndpoint"
+                  host="*"
+                  httpsPort="9443"
+                  protocolVersion="http/2"/>
+
+    <webApplication location="/app/app.war"
+                    contextRoot="/">
+        <classloader apiTypeVisibility="api,ibm-api,spec,stable,third-party"/>
+    </webApplication>
+
+    <mpJwt id="mpJwt"
+           sslRef="ssl"
+           keyName="${env.JWT_PUBLIC_KEY_NAME}"
+           issuer="${env.JWT_ISSUER}"/>
+
+    <library id="postgresqlJdbc">
+        <fileset dir="/app/jdbc" includes="postgresql-jdbc-driver.jar"/>
+    </library>
+
+    <jdbcDriver id="postgresql-jdbc-driver"
+                javax.sql.XADataSource="org.postgresql.xa.PGXADataSource"
+                javax.sql.ConnectionPoolDataSource="org.postgresql.ds.PGConnectionPoolDataSource"
+                libraryRef="postgresqlJdbc"
+                autosave="always"/>
+
+    <dataSource id="db"
+                jndiName="jdbc/db"
+                jdbcDriverRef="postgresql-jdbc-driver"
+                type="javax.sql.ConnectionPoolDataSource"
+                transactional="true">
+        <properties serverName="${env.DB_HOST}"
+                    portNumber="${env.DB_PORT}"
+                    databaseName="${env.DB_NAME}"
+                    user="${env.DB_USER_NAME}"
+                    password="${env.DB_USER_PASSWORD}"/>
+    </dataSource>
+
+</server>

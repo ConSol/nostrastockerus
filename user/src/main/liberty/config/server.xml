@@ -1,0 +1,97 @@
+<server description="user service">
+
+    <featureManager>
+        <feature>mpJwt-1.1</feature>
+        <feature>jaxrs-2.1</feature>
+        <feature>cdi-2.0</feature>
+        <feature>jpa-2.2</feature>
+        <feature>beanValidation-2.0</feature>
+        <feature>mpOpenAPI-1.0</feature>
+        <feature>mpOpenTracing-1.1</feature>
+        <feature>usr:opentracingZipkin-0.31</feature>
+        <feature>mpMetrics-1.1</feature>
+        <feature>mpHealth-1.0</feature>
+        <feature>jsonb-1.0</feature>
+    </featureManager>
+
+    <!-- turn off authentication in order to make it easier to collect metrics -->
+    <!-- the metrics endpoint can be secured via MP-JWT authentication -->
+    <!-- see https://github.com/OpenLiberty/guide-microprofile-jwt/issues/86 -->
+    <mpMetrics authentication="false"/>
+
+    <!-- send traces to http://zipkin:9411/ -->
+    <!-- note: Zipkin must be deployed beforehand -->
+    <opentracingZipkin host="zipkin" port="9411"/>
+
+    <!-- stores private key which is used for signing JWTs -->
+    <keyStore id="defaultKeyStore"
+              location="${env.KEY_STORE_LOCATION}"
+              type="${env.KEY_STORE_TYPE}"
+              password="${env.KEY_STORE_PASSWORD}"
+              readonly="true"/>
+
+    <!-- stores public key which is needed for checking JWTs' signatures -->
+    <keyStore id="defaultTrustStore"
+              location="${env.TRUST_STORE_LOCATION}"
+              type="${env.TRUST_STORE_TYPE}"
+              password="${env.TRUST_STORE_PASSWORD}"
+              readonly="true"/>
+
+    <httpEndpoint id="defaultHttpEndpoint"
+                  host="*"
+                  httpsPort="9443"
+                  protocolVersion="http/2"/>
+
+    <webApplication location="/app/app.war"
+                    contextRoot="/">
+        <classloader apiTypeVisibility="api,ibm-api,spec,stable,third-party"/>
+    </webApplication>
+
+    <!-- this is needed for creating JWTs -->
+    <!-- see de.consol.labs.microprofilearticle.user.api.TokenResource -->
+    <jwtBuilder id="jwtBuilder"
+                keyStoreRef="defaultKeyStore"
+                keyAlias="${env.JWT_PRIVATE_KEY_NAME}"
+                issuer="${env.JWT_ISSUER}"/>
+
+    <!-- this is needed for RBAC checks of the incoming HTTP requests -->
+    <!-- the checks are done by the container runtime (i.e. by open liberty) -->
+    <!-- they are performed according to the javax.annotation.security.* annotations (e.g. @RolesAllowed) -->
+    <!-- see de.consol.labs.microprofilearticle.user.api.UserResource -->
+    <mpJwt id="mpJwt"
+           keyName="${env.JWT_PRIVATE_KEY_NAME}"
+           issuer="${env.JWT_ISSUER}"/>
+
+    <!-- this is needed for parsing JWT in user code -->
+    <!-- see de.consol.labs.microprofilearticle.user.logging.TokenLogger -->
+    <jwtConsumer id="jwtConsumer"
+                 trustStoreRef="defaultTrustStore"
+                 trustedAlias="${env.JWT_PUBLIC_KEY_NAME}"
+                 issuer="${env.JWT_ISSUER}"/>
+
+    <!-- library with postgresql jdbc driver -->
+    <library id="postgresqlJdbc">
+        <fileset dir="/app/jdbc" includes="postgresql-jdbc-driver.jar"/>
+    </library>
+
+    <!-- postgresql jdbc driver -->
+    <jdbcDriver id="postgresql-jdbc-driver"
+                javax.sql.XADataSource="org.postgresql.xa.PGXADataSource"
+                javax.sql.ConnectionPoolDataSource="org.postgresql.ds.PGConnectionPoolDataSource"
+                libraryRef="postgresqlJdbc"
+                autosave="always"/>
+
+    <!-- datasource configuration -->
+    <dataSource id="db"
+                jndiName="jdbc/db"
+                jdbcDriverRef="postgresql-jdbc-driver"
+                type="javax.sql.ConnectionPoolDataSource"
+                transactional="true">
+        <properties serverName="${env.DB_HOST}"
+                    portNumber="${env.DB_PORT}"
+                    databaseName="${env.DB_NAME}"
+                    user="${env.DB_USER_NAME}"
+                    password="${env.DB_USER_PASSWORD}"/>
+    </dataSource>
+
+</server>

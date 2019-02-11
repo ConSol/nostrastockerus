@@ -1,0 +1,213 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prophecy-monitor
+  labels:
+    app: prophecy
+    component: monitoring
+    release: microprofile-article
+spec:
+  selector:
+    matchLabels:
+      app: prophecy
+      providesMetrics: "true"
+  endpoints:
+    - port: https
+      scheme: https
+      tlsConfig:
+        insecureSkipVerify: true
+      interval: "10s"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prophecy
+  labels:
+    app: prophecy
+    component: rest-application
+    providesMetrics: "true"
+spec:
+  type: LoadBalancer
+  ports:
+    - name: https
+      port: 443
+      targetPort: 9443
+      protocol: TCP
+  selector:
+    app: prophecy
+    component: rest-application
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prophecy
+  labels:
+    app: prophecy
+    component: rest-application
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 50%
+  selector:
+    matchLabels:
+      app: prophecy
+      component: rest-application
+  template:
+    metadata:
+      labels:
+        app: prophecy
+        component: rest-application
+        providesMetrics: "true"
+    spec:
+      containers:
+        - name: prophecy
+          image: containerimageforprophecy
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+          ports:
+            - containerPort: 9443
+          env:
+            - name: "KEY_STORE_LOCATION"
+              value: "/app/keystore.pkcs12"
+            - name: "KEY_STORE_TYPE"
+              value: "PKCS12"
+            - name: "KEY_STORE_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: prophecy-keystore
+                  key: KEY_STORE_PASSWORD
+            - name: "TRUST_STORE_LOCATION"
+              value: "/app/truststore.pkcs12"
+            - name: "TRUST_STORE_TYPE"
+              value: "PKCS12"
+            - name: "TRUST_STORE_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: truststore
+                  key: TRUST_STORE_PASSWORD
+            - name: "JWT_ISSUER"
+              value: "https://user/token"
+            - name: "JWT_PUBLIC_KEY_NAME"
+              value: "user-public-key"
+            - name: "DB_HOST"
+              value: "prophecy-db"
+            - name: "DB_PORT"
+              value: "5432"
+            - name: "DB_NAME"
+              valueFrom:
+                secretKeyRef:
+                  name: prophecy-db
+                  key: DB_NAME
+            - name: "DB_USER_NAME"
+              valueFrom:
+                secretKeyRef:
+                  name: prophecy-db
+                  key: DB_USER
+            - name: "DB_USER_PASSWORD"
+              valueFrom:
+                secretKeyRef:
+                  name: prophecy-db
+                  key: DB_PASSWORD
+            # for testing purposes
+            - name: "DE_CONSOL_LABS_MICROPROFILEARTICLE_PROPHECY_CONFIG_MINDIFFERENCEBETWEENEXPECTEDATANDCREATEDATSECONDS"
+              value: "0"
+            - name: "DE_CONSOL_LABS_MICROPROFILEARTICLE_PROPHECY_CONFIG_RELATIVEVOTINGDURATIONPERCENTAGE"
+              value: "100"
+          volumeMounts:
+            - name: prophecy-keystore
+              mountPath: "/app/keystore.pkcs12"
+              subPath: prophecy-keystore.pkcs12
+              readOnly: true
+            - name: truststore
+              mountPath: "/app/truststore.pkcs12"
+              subPath: truststore.pkcs12
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /health
+              port: 9443
+            timeoutSeconds: 3
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: prophecy-keystore
+          secret:
+            secretName: prophecy-keystore
+        - name: truststore
+          secret:
+            secretName: truststore
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: prophecy-db
+  labels:
+    app: prophecy
+    component: persistence
+    providesMetrics: "false"
+spec:
+  ports:
+    - port: 5432
+      protocol: TCP
+  selector:
+    app: prophecy
+    component: persistence
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prophecy-db
+  labels:
+    app: prophecy
+    component: persistence
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: prophecy
+      component: persistence
+  template:
+    metadata:
+      labels:
+        app: prophecy
+        component: persistence
+        providesMetrics: "false"
+    spec:
+      containers:
+        - image: postgres:11.1-alpine
+          name: postgresql
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: prophecy-db
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: prophecy-db
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: prophecy-db
+                  key: DB_PASSWORD
+          ports:
+            - containerPort: 5432

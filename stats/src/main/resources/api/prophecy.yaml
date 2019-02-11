@@ -1,0 +1,298 @@
+openapi: 3.0.0
+info:
+  title: Deployed APIs
+  version: 1.0.0
+paths:
+  /prophecy/{id}:
+    get:
+      summary: Get prophecy information.
+      description: Retrieve prophecy information.
+      operationId: getProphecyInformation
+      parameters:
+        - name: id
+          in: path
+          description: Prophecy ID.
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        404:
+          description: The prophecy does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientError'
+        200:
+          description: Prophecy information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prophecy'
+      security:
+        - jwt: []
+  /prophecy:
+    get:
+      summary: Find prophecies in the given time window.
+      description: Find prophecies in the given time window.
+      operationId: findPropheciesByExpectedAt
+      parameters:
+        - name: expectedFrom
+          in: query
+          description: Earliest time point when a prophecy is expected to fulfill.
+          required: true
+          schema:
+            type: string
+            format: date-time
+            example: 2019-01-21T14:30:44.406Z
+        - name: expectedTo
+          in: query
+          description: Latest time point when a prophecy is expected to fulfill.
+          required: true
+          schema:
+            type: string
+            format: date-time
+            example: 2019-03-21T15:30:44.406Z
+      responses:
+        200:
+          description: Found prophecies.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Prophecy'
+      security:
+        - jwt: []
+    post:
+      summary: Create a new prophecy.
+      description: Create a new prophecy.
+      operationId: createProphecy
+      requestBody:
+        description: Prophecy data.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProphecyRequest'
+        required: true
+      responses:
+        201:
+          description: Prophecy has been created.
+          headers:
+            Location:
+              description: The URL under which the created prophecy's data can be
+                obtained.
+              required: true
+              style: simple
+              schema:
+                type: string
+                format: uri
+      security:
+        - jwt: []
+  /prophecy/createdBy/{userName}:
+    get:
+      summary: Get prophecies created by user.
+      description: Retrieve prophecies created by user.
+      operationId: getPropheciesCreatedByUser
+      parameters:
+        - name: userName
+          in: path
+          description: User name.
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Prophecies created by the user.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Prophecy'
+      security:
+        - jwt: []
+  /vote/for/{prophecyId}:
+    post:
+      summary: Vote for a prophecy.
+      description: Vote for a prophecy.
+      operationId: voteForProphecy
+      parameters:
+        - name: prophecyId
+          in: path
+          description: Prophecy ID.
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        204:
+          description: Vote has been accepted.
+        409:
+          description: Vote cannot be accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientError'
+      security:
+        - jwt: []
+  /vote/{prophecyId}:
+    delete:
+      summary: Delete previously created vote for a prophecy.
+      description: Delete previously created vote for a prophecy or do nothing if
+        it does not exist.
+      operationId: abstain
+      parameters:
+        - name: prophecyId
+          in: path
+          description: Prophecy ID.
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        204:
+          description: Vote has been deleted (if it existed).
+        409:
+          description: Vote cannot be deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientError'
+      security:
+        - jwt: []
+  /vote/against/{prophecyId}:
+    post:
+      summary: Vote against a prophecy.
+      description: Vote against a prophecy.
+      operationId: voteAgainstProphecy
+      parameters:
+        - name: prophecyId
+          in: path
+          description: Prophecy ID.
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        204:
+          description: Vote has been accepted.
+        409:
+          description: Vote cannot be accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientError'
+      security:
+        - jwt: []
+components:
+  schemas:
+    CreateProphecyRequest:
+      required:
+        - expectedAt
+        - prophecyType
+        - stockExpectedValue
+        - stockName
+      type: object
+      properties:
+        stockName:
+          maxLength: 100
+          minLength: 1
+          type: string
+          description: Stock name.
+          example: GOOG
+        stockExpectedValue:
+          minimum: 0.0
+          type: number
+          description: Expected future stock value.
+          example: 120.45
+        prophecyType:
+          type: string
+          description: Type of prophecy.
+          enum:
+            - BEAR
+            - BULL
+        expectedAt:
+          type: string
+          description: Moment in time when the prophecy is expected to be fulfilled.
+          format: date-time
+          example: 2019-03-21T14:30:44.406Z
+      description: Information needed to create a prophecy.
+    ClientError:
+      required:
+        - message
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message explaining why HTTP request could not be fulfilled.
+          example: prophecy not found
+      description: Information returned to client in case of a client error.
+    Prophecy:
+      required:
+        - createdAt
+        - createdBy
+        - expectedAt
+        - id
+        - prophecyType
+        - stockExpectedValue
+        - stockName
+        - votesAgainst
+        - votesFor
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Prophecy ID.
+          format: int64
+          example: 25
+        createdBy:
+          maxLength: 100
+          minLength: 3
+          type: string
+          description: Name of the user which has created the prophecy.
+          example: bob
+        createdAt:
+          type: string
+          description: Timestamp when the prophecy was created.
+          format: date-time
+          example: 2019-03-21T14:30:44.406Z
+        stockName:
+          maxLength: 100
+          minLength: 1
+          type: string
+          description: Stock name.
+          example: GOOG
+        stockExpectedValue:
+          minimum: 0.0
+          type: number
+          description: Expected future stock value.
+          example: 120.45
+        prophecyType:
+          type: string
+          description: Type of prophecy.
+          example: BULL
+          enum:
+            - BEAR
+            - BULL
+        expectedAt:
+          type: string
+          description: Moment in time when the prophecy is expected to be fulfilled.
+          format: date-time
+          example: 2019-03-21T14:30:44.406Z
+        votesFor:
+          minimum: 0
+          type: integer
+          description: Number of votes for the prophecy.
+          example: 10
+        votesAgainst:
+          minimum: 0
+          type: integer
+          description: Number of votes against the prophecy.
+          example: 5
+      description: Prophecy information.
+  securitySchemes:
+    jwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

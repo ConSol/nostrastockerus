@@ -1,0 +1,184 @@
+openapi: 3.0.0
+info:
+  title: Deployed APIs
+  version: 1.0.0
+paths:
+  /token/admin:
+    get:
+      summary: Generate admin token
+      description: Generate admin token and save it locally to a file. Only the one
+        who has access to the server (i.e. admin) is able to access the generated
+        token
+      operationId: createAdminToken
+      responses:
+        409:
+          description: Admin token already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientError'
+        204:
+          description: Admin token has been created.
+  /token:
+    post:
+      summary: Generate a JWT token.
+      description: Generate JWT token with a given validity duration for a given user
+        and grant him given roles.
+      operationId: create
+      requestBody:
+        description: Information needed for creating a token.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTokenRequest'
+        required: true
+      responses:
+        409:
+          description: The given user does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientError'
+        200:
+          description: The token has been created.
+          content:
+            text/plain: {}
+      security:
+        - jwt: []
+  /user/{name}:
+    get:
+      summary: Get user information.
+      description: Retrieve user information.
+      operationId: getUser
+      parameters:
+        - name: name
+          in: path
+          description: User name.
+          required: true
+          schema:
+            type: string
+      responses:
+        404:
+          description: The user does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientError'
+        200:
+          description: User information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+      security:
+        - jwt: []
+  /user:
+    post:
+      summary: Create a new user.
+      description: Create a new user.
+      operationId: createUser
+      requestBody:
+        description: User data.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+        required: true
+      responses:
+        409:
+          description: The user already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientError'
+        201:
+          description: User has been created.
+          headers:
+            Location:
+              description: The URL under which the created user's data can be obtained.
+              required: true
+              style: simple
+              schema:
+                type: string
+                format: uri
+      security:
+        - jwt: []
+components:
+  schemas:
+    CreateTokenRequest:
+      required:
+        - userName
+      type: object
+      properties:
+        userName:
+          maxLength: 100
+          minLength: 3
+          type: string
+          description: User name.
+          example: bob
+        roles:
+          uniqueItems: true
+          type: array
+          description: User roles.
+          example:
+            - chef
+            - waiter
+            - bartender
+            - butcher
+          items:
+            type: string
+        validityDurationMillis:
+          maximum: 864000000
+          minimum: 60000
+          type: integer
+          description: Desired validity duration of the token in milliseconds.
+          format: int64
+          example: 100000
+          default: "86400000"
+      description: Information needed for creating a token.
+    User:
+      required:
+        - email
+        - name
+      type: object
+      properties:
+        name:
+          maxLength: 100
+          minLength: 3
+          type: string
+          description: User name.
+          example: bob
+        email:
+          maxLength: 100
+          minLength: 5
+          type: string
+          description: User email.
+          format: email
+          example: bob@test.org
+        createdAt:
+          type: string
+          description: Timestamp when the user was created.
+          format: date-time
+          example: 2019-03-21T14:30:44.406Z
+        createdBy:
+          maxLength: 100
+          minLength: 3
+          type: string
+          description: User which created this user.
+          example: admin
+      description: User data.
+    ClientError:
+      required:
+        - message
+      type: object
+      properties:
+        message:
+          type: string
+          description: Error message explaining why HTTP request could not be fulfilled.
+          example: entity not found
+      description: Information returned to client in case of a client error.
+  securitySchemes:
+    jwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
